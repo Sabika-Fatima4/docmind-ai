@@ -4,6 +4,7 @@ from app.database.database import Base, engine
 from app.models.user import User
 
 from app.routers import users
+from app.routers import pdf
 
 
 app = FastAPI(
@@ -13,3 +14,4 @@ app = FastAPI(
 )
 Base.metadata.create_all(bind=engine)
 app.include_router(users.router)
+app.include_router(pdf.router)
