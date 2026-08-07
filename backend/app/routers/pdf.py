@@ -6,7 +6,7 @@ from app.ai.chunker import chunk_text
 from app.ai.chunker import chunk_text
 from app.ai.embeddings import create_embeddings
 from app.ai.vectordb import store_chunks
-
+from app.ai.rag import retrieve_context, ask_question
 router = APIRouter(prefix="/pdf", tags=["PDF"])
 
 UPLOAD_FOLDER = "uploads"
@@ -40,3 +40,18 @@ async def upload_pdf(file: UploadFile = File(...)):
     "chunks": len(chunks),
     "status": "Indexed successfully"
      }
+
+@router.post("/search")
+async def search_pdf(question: str):
+
+    chunks = retrieve_context(question)
+
+    return {
+        "question": question,
+        "results": chunks
+    }
+
+@router.post("/chat")
+async def chat(question: str):
+
+    return ask_question(question)
