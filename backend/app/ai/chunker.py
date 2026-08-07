@@ -1,15 +1,23 @@
-def chunk_text(text, chunk_size=500, overlap=100):
+def chunk_text(page_data, chunk_size=500, overlap=100):
 
     chunks = []
 
-    start = 0
+    for page in page_data:
 
-    while start < len(text):
+        text = page["text"]
+        page_number = page["page"]
 
-        end = start + chunk_size
+        start = 0
 
-        chunks.append(text[start:end])
+        while start < len(text):
 
-        start += chunk_size - overlap
+            end = start + chunk_size
+
+            chunks.append({
+                "text": text[start:end],
+                "page": page_number
+            })
+
+            start += chunk_size - overlap
 
     return chunks
