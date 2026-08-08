@@ -21,7 +21,7 @@ router = APIRouter(prefix="/pdf", tags=["PDF"])
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
+MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 @router.post("/upload")
 async def upload_pdf(
@@ -29,6 +29,21 @@ async def upload_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    contents = await file.read()
+
+    if len(contents) > MAX_FILE_SIZE:
+     raise HTTPException(
+        status_code=413,
+        detail="File too large. Maximum PDF size is 25 MB."
+    )
+
+    if not contents:
+     raise HTTPException(
+        status_code=400,
+        detail="The uploaded file is empty."
+    )
+
+    file.file.seek(0)
 
     if not file.filename.lower().endswith(".pdf"):
         return {

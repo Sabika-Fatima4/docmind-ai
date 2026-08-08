@@ -42,9 +42,13 @@ def search(query_embedding, document_id, n_results=3):
         n_results=n_results,
         where={
             "document_id": document_id
-        }
+        },
+        include=["documents", "metadatas", "distances"]
     )
+
+
 def delete_document(document_id):
+
     collection.delete(
         where={"document_id": document_id}
     )

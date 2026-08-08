@@ -3,6 +3,9 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from app.database.dependencies import get_db
 from app.models.user import User
@@ -11,8 +14,7 @@ from app.models.user import User
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
-
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/token")
 
 def get_current_user(
     token: str = Depends(oauth2_scheme),
