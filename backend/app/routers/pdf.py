@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File,Depends,HTTPException
 import os
 import shutil
 import uuid
@@ -6,9 +6,17 @@ import uuid
 from app.ai.pdf_loader import extract_text
 from app.ai.chunker import chunk_text
 from app.ai.embeddings import create_embeddings
-from app.ai.vectordb import store_chunks
+from app.ai.vectordb import store_chunks,delete_document
 from app.ai.rag import retrieve_context, ask_question
 from app.schemas.chat import ChatRequest
+
+from app.database.dependencies import get_db
+from app.models.document import Document
+from sqlalchemy.orm import Session
+from app.auth.dependencies import get_current_user
+from app.models.user import User
+
+
 router = APIRouter(prefix="/pdf", tags=["PDF"])
 
 UPLOAD_FOLDER = "uploads"
@@ -16,7 +24,11 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 @router.post("/upload")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
 
     if not file.filename.lower().endswith(".pdf"):
         return {
@@ -51,6 +63,15 @@ async def upload_pdf(file: UploadFile = File(...)):
         file.filename
     )
 
+    document = Document(
+        document_id=document_id,
+        filename=file.filename,
+        owner_id=current_user.id
+    )
+
+    db.add(document)
+    db.commit()
+
     return {
         "document_id": document_id,
         "filename": file.filename,
@@ -60,10 +81,22 @@ async def upload_pdf(file: UploadFile = File(...)):
     }
 
 @router.post("/search")
-async def search_pdf(
+def search_pdf(
     question: str,
-    document_id: str
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+    document = db.query(Document).filter(
+        Document.document_id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found."
+        )
 
     return {
         "question": question,
@@ -75,9 +108,72 @@ async def search_pdf(
 
 
 @router.post("/chat")
-async def chat(request: ChatRequest):
+def chat(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    document = db.query(Document).filter(
+        Document.document_id == request.document_id,
+        Document.owner_id == current_user.id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found."
+        )
 
     return ask_question(
         request.question,
         request.document_id
     )
+
+@router.get("/my-documents")
+def get_my_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    documents = db.query(Document).filter(
+        Document.owner_id == current_user.id
+    ).all()
+
+    return documents
+
+@router.delete("/{document_id}")
+def delete_pdf(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    document = db.query(Document).filter(
+        Document.document_id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found."
+        )
+
+    # Delete embeddings from ChromaDB
+    delete_document(document_id)
+
+    # Delete the physical PDF file
+    file_path = os.path.join(
+        UPLOAD_FOLDER,
+        f"{document_id}_{document.filename}"
+    )
+
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    # Delete the database record
+    db.delete(document)
+    db.commit()
+
+    return {
+        "message": "Document deleted successfully",
+        "document_id": document_id
+    }

@@ -44,3 +44,7 @@ def search(query_embedding, document_id, n_results=3):
             "document_id": document_id
         }
     )
+def delete_document(document_id):
+    collection.delete(
+        where={"document_id": document_id}
+    )
